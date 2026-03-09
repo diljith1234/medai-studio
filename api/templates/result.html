@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Health Predictor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container fade-in">
+    <h1>🩺 AI Health Predictor</h1>
+
+    <form method="POST" action="/predict">
+        {% for symptom in symptoms %}
+        <label class="symptom">
+            <input type="checkbox" name="symptoms" value="{{ symptom }}">
+            {{ symptom }}
+        </label>
+        {% endfor %}
+
+        <button type="submit">Predict</button>
+    </form>
+
+    {% if result %}
+    <div class="result fade-in">
+        <h3>{{ result }}</h3>
+    </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
