@@ -13,7 +13,7 @@ export default function SymptomChecker() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:5000/symptoms")
+    fetch('/api/symptoms')
       .then(res => res.json())
       .then(data => setSymptomsList(data.symptoms || []))
       .catch(err => console.error("Backend offline", err));
