@@ -12,8 +12,9 @@ export default function SymptomChecker() {
   const [precautions, setPrecautions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // FIX 1: Point this to /api/main (where your Python logic lives)
   useEffect(() => {
-    fetch('/api/symptoms')
+    fetch('/api/main') 
       .then(res => res.json())
       .then(data => setSymptomsList(data.symptoms || []))
       .catch(err => console.error("Backend offline", err));
@@ -26,15 +27,18 @@ export default function SymptomChecker() {
   const handleAnalyze = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/predict", {
+      const response = await fetch("/api/main", { // FIX 2: Ensure this matches the function name
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symptoms: selected }),
       });
-      const data = await res.json();
+      
+      // FIX 3: Changed 'res' to 'response' to match the variable above
+      const data = await response.json(); 
+      
       setPrediction(data.prediction);
       setDescription(data.description);
-      setPrecautions(data.precautions);
+      setPrecautions(data.precautions || []);
     } catch (error) {
       setPrediction("Server Error");
     } finally {
