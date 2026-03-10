@@ -10,7 +10,7 @@ CORS(app)
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
-# Load AI Model and Features
+# Load AI Model and the original feature list
 model = joblib.load(os.path.join(base_path, "model.pkl"))
 all_features = joblib.load(os.path.join(base_path, "features.pkl"))
 
@@ -18,22 +18,25 @@ all_features = joblib.load(os.path.join(base_path, "features.pkl"))
 description_df = pd.read_csv(os.path.join(base_path, "symptom_Description.csv"))
 precaution_df = pd.read_csv(os.path.join(base_path, "symptom_precaution.csv"))
 
-# --- CRITICAL FIX: EXACT FEATURE MAPPING ---
-def get_model_features():
-    # We need the 131 unique symptoms in the EXACT order the model was trained on.
-    # We strip the 'Symptom_X_' prefix and keep unique values.
-    unique_list = []
-    for f in list(all_features):
+# --- THE FIX: MANUAL FEATURE RE-ORDERING ---
+def get_clean_vocab():
+    # We need to extract the unique 131 symptom names in the order they appear
+    # in the dataset. Since the dataset was likely 'flat', we take the unique 
+    # names while preserving the order of their first appearance.
+    seen = set()
+    ordered_unique = []
+    for f in all_features:
+        # Strip 'Symptom_1_', 'Symptom_2_', etc.
         clean = "_".join(f.split("_")[2:]) if "Symptom_" in f else f
         clean = clean.strip().lower()
-        if clean not in unique_list:
-            unique_list.append(clean)
+        if clean not in seen:
+            ordered_unique.append(clean)
+            seen.add(clean)
     
-    # Return exactly the 131 symptoms the model expects
-    return unique_list[:131]
+    # Return exactly the 131 symptoms the model was built for
+    return ordered_unique[:131]
 
-# Save this list so we use it for every prediction
-MODEL_VOCABULARY = get_model_features()
+VOCAB = get_clean_vocab()
 
 @app.route("/api/main", methods=["GET", "POST"])
 def handle_request():
@@ -43,26 +46,29 @@ def handle_request():
     if request.method == "POST":
         try:
             data = request.get_json()
-            selected_ui_symptoms = data.get("symptoms", [])
+            user_selections = data.get("symptoms", [])
             
-            # Create a vector of 131 zeros
+            # Create a vector of exactly 131 zeros
+            # If your model specifically requires 131, this MUST be 131.
             input_vector = np.zeros(131)
             
-            for s in selected_ui_symptoms:
-                # Clean the symptom from the UI (e.g., "Symptom_1_headache" -> "headache")
+            for s in user_selections:
+                # Clean the symptom from the UI
                 clean_s = "_".join(s.split("_")[2:]) if "Symptom_" in s else s
                 clean_s = clean_s.strip().lower()
 
-                # Find its correct position in the 131-item list
-                if clean_s in MODEL_VOCABULARY:
-                    idx = MODEL_VOCABULARY.index(clean_s)
+                # Check against our VOCAB
+                if clean_s in VOCAB:
+                    idx = VOCAB.index(clean_s)
                     input_vector[idx] = 1
 
-            # Predict
-            prediction_result = model.predict(input_vector.reshape(1, -1))[0]
-            disease = str(prediction_result).strip()
+            # --- DEBUGGING LOG (See this in Vercel Runtime Logs) ---
+            print(f"Selected: {user_selections} -> Vector Indices: {np.where(input_vector == 1)}")
 
-            # Get Description and Precautions
+            prediction = model.predict(input_vector.reshape(1, -1))[0]
+            disease = str(prediction).strip()
+
+            # Metadata Lookup
             desc = description_df[description_df['Disease'] == disease]['Description'].values
             description = desc[0] if len(desc) > 0 else "No description available."
 
@@ -72,11 +78,11 @@ def handle_request():
             return jsonify({
                 "prediction": disease,
                 "description": description,
-                "precautions": precautions,
-                "status": "success"
+                "precautions": precautions
             })
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            print(f"ERROR: {str(e)}")
+            return jsonify({"error": "Prediction failed"}), 500
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
