@@ -16,15 +16,8 @@ export default function SymptomChecker() {
     fetch('/api/main')
       .then(res => res.json())
       .then(data => {
-        // CLEANING LOGIC: Remove "Symptom_1_", "Symptom_2_", etc. 
-        // and keep only unique symptom names
-        const raw = data.symptoms || [];
-        const cleaned = raw.map((s: string) => {
-          return s.replace(/Symptom_\d+_/g, '').replace(/_/g, ' ').trim();
-        });
-        // Remove duplicates so "acidity" only appears once
-        const uniqueSymptoms = Array.from(new Set(cleaned)) as string[];
-        setSymptomsList(uniqueSymptoms);
+        // Just set the symptoms directly!
+        setSymptomsList(data.symptoms || []);
       })
       .catch(err => console.error("Backend offline", err));
   }, []);
