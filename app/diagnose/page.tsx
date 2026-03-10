@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Activity, Search } from 'lucide-react';
+import { ArrowLeft, Search } from 'lucide-react';
 
 export default function SymptomChecker() {
   const [symptomsList, setSymptomsList] = useState<string[]>([]);
@@ -12,20 +12,24 @@ export default function SymptomChecker() {
   const [precautions, setPrecautions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Fetch Logic
   useEffect(() => {
     fetch('/api/main')
       .then(res => res.json())
       .then(data => {
-        // Just set the symptoms directly!
         setSymptomsList(data.symptoms || []);
       })
       .catch(err => console.error("Backend offline", err));
   }, []);
 
+  // --- ADDED THIS FUNCTION TO FIX THE ERROR ---
   const handleToggle = (s: string) => {
-    setSelected(prev => prev.includes(s) ? prev.filter(item => item !== s) : [...prev, s]);
+    setSelected(prev => 
+      prev.includes(s) ? prev.filter(item => item !== s) : [...prev, s]
+    );
   };
 
+  // Analyze Logic
   const handleAnalyze = async () => {
     setLoading(true);
     try {
@@ -36,7 +40,6 @@ export default function SymptomChecker() {
       });
       
       const data = await response.json();
-      
       setPrediction(data.prediction);
       setDescription(data.description);
       setPrecautions(data.precautions || []);
@@ -75,17 +78,24 @@ export default function SymptomChecker() {
               {symptomsList
                 .filter(s => s.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(s => (
-                  <button key={s} onClick={() => handleToggle(s)}
+                  <button 
+                    key={s} 
+                    onClick={() => handleToggle(s)}
                     className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all border ${
                       selected.includes(s) ? 'bg-blue-600 text-white border-blue-600 shadow-lg scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'
-                    }`}>
-                    <span className="capitalize">{s}</span>
+                    }`}
+                  >
+                    {/* Replaced _ with space for better look */}
+                    <span className="capitalize">{s.replace(/_/g, ' ')}</span>
                   </button>
                 ))}
             </div>
 
-            <button onClick={handleAnalyze} disabled={loading || selected.length === 0}
-              className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl hover:bg-blue-600 disabled:bg-slate-200 transition-all shadow-xl active:scale-[0.98] text-lg">
+            <button 
+              onClick={handleAnalyze} 
+              disabled={loading || selected.length === 0}
+              className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl hover:bg-blue-600 disabled:bg-slate-200 transition-all shadow-xl active:scale-[0.98] text-lg"
+            >
               {loading ? "Analyzing Medical Data..." : `Analyze ${selected.length} Selected Symptoms`}
             </button>
 
