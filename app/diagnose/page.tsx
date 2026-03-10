@@ -12,11 +12,20 @@ export default function SymptomChecker() {
   const [precautions, setPrecautions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // FIX 1: Point this to /api/main (where your Python logic lives)
   useEffect(() => {
-    fetch('/api/main') 
+    fetch('/api/main')
       .then(res => res.json())
-      .then(data => setSymptomsList(data.symptoms || []))
+      .then(data => {
+        // CLEANING LOGIC: Remove "Symptom_1_", "Symptom_2_", etc. 
+        // and keep only unique symptom names
+        const raw = data.symptoms || [];
+        const cleaned = raw.map((s: string) => {
+          return s.replace(/Symptom_\d+_/g, '').replace(/_/g, ' ').trim();
+        });
+        // Remove duplicates so "acidity" only appears once
+        const uniqueSymptoms = Array.from(new Set(cleaned)) as string[];
+        setSymptomsList(uniqueSymptoms);
+      })
       .catch(err => console.error("Backend offline", err));
   }, []);
 
@@ -27,14 +36,13 @@ export default function SymptomChecker() {
   const handleAnalyze = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/main", { // FIX 2: Ensure this matches the function name
+      const response = await fetch("/api/main", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symptoms: selected }),
       });
       
-      // FIX 3: Changed 'res' to 'response' to match the variable above
-      const data = await response.json(); 
+      const data = await response.json();
       
       setPrediction(data.prediction);
       setDescription(data.description);
@@ -59,12 +67,11 @@ export default function SymptomChecker() {
             <p className="text-slate-500 mt-2">Select all symptoms you are currently experiencing.</p>
           </header>
 
-          {/* Search Bar */}
           <div className="relative mb-8">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input 
               type="text"
-              placeholder="Search 131 symptoms (e.g. fever, headache)..."
+              placeholder="Search symptoms (e.g. fever, headache)..."
               className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-50 bg-slate-50 focus:bg-white focus:border-blue-500 outline-none transition-all font-medium"
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -73,13 +80,13 @@ export default function SymptomChecker() {
           <div className="space-y-6">
             <div className="flex flex-wrap gap-2 max-h-96 overflow-y-auto p-2 scrollbar-hide">
               {symptomsList
-                .filter(s => s.toLowerCase().replace(/_/g, ' ').includes(searchTerm.toLowerCase()))
+                .filter(s => s.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(s => (
                   <button key={s} onClick={() => handleToggle(s)}
                     className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all border ${
                       selected.includes(s) ? 'bg-blue-600 text-white border-blue-600 shadow-lg scale-105' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400'
                     }`}>
-                    <span className="capitalize">{s.replace(/_/g, ' ')}</span>
+                    <span className="capitalize">{s}</span>
                   </button>
                 ))}
             </div>
