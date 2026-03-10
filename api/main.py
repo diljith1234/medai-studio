@@ -19,60 +19,61 @@ all_features = joblib.load(os.path.join(base_path, "features.pkl"))
 description_df = pd.read_csv(os.path.join(base_path, "symptom_Description.csv"))
 precaution_df = pd.read_csv(os.path.join(base_path, "symptom_precaution.csv"))
 
-# --- PRE-PROCESSING THE FEATURES ---
-# Your model expects 131 features. We need to extract the "unique" 131 symptom names
-# from the 394 list (removing 'Symptom_1_', etc.)
-def get_clean_feature_list():
-    raw_names = []
+# --- IMPROVED PRE-PROCESSING ---
+# This creates a list of the 131 unique symptoms the model actually knows.
+def get_model_feature_names():
+    # Get the 131 symptom names without the "Symptom_X_" prefix
+    # We use a set to keep only unique names, then sort to maintain order
+    unique_names = []
     for f in list(all_features):
-        # Cleans 'Symptom_1_itching' -> 'itching'
-        clean_name = "_".join(f.split("_")[2:]) if "Symptom_" in f else f
-        raw_names.append(clean_name.strip())
+        clean = "_".join(f.split("_")[2:]) if "Symptom_" in f else f
+        clean = clean.strip()
+        if clean not in unique_names:
+            unique_names.append(clean)
     
-    # We take only the first 131 to match the model's training
-    return raw_names[:model.n_features_in_]
+    # Return exactly the number of features the model expects
+    return unique_names[:model.n_features_in_]
 
-CLEAN_FEATURES = get_clean_feature_list()
+# Pre-calculate the clean list once when the server starts
+CLEAN_SYMPTOMS = get_model_feature_names()
 
 @app.route("/api/main", methods=["GET", "POST"])
 def handle_request():
-    # --- 1. HANDLE SYMPTOM LIST REQUEST (GET) ---
+    # --- 1. GET SYMPTOMS (For the Frontend Dropdown) ---
     if request.method == "GET":
         try:
-            # We send the original 394 list so the Frontend matches what you see in the pickle
+            # We return the original 394-item list so your frontend logic stays the same
             return jsonify({"symptoms": list(all_features)})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-    # --- 2. HANDLE PREDICTION REQUEST (POST) ---
+    # --- 2. PREDICT DISEASE (The Analyze Button) ---
     if request.method == "POST":
         try:
             data = request.get_json()
-            selected_symptoms = data.get("symptoms", [])
+            selected_from_ui = data.get("symptoms", [])
             
-            # Initialize input vector with exactly 131 zeros (matching the model)
-            input_vector = np.zeros(len(CLEAN_FEATURES))
+            # Create a blank vector of 131 zeros
+            input_vector = np.zeros(len(CLEAN_SYMPTOMS))
             
-            # Map selected symptoms to the input vector
-            for s in selected_symptoms:
-                # Clean the incoming symptom name to match our feature list
+            for s in selected_from_ui:
+                # Clean the incoming symptom (e.g., "Symptom_1_headache" -> "headache")
                 clean_s = "_".join(s.split("_")[2:]) if "Symptom_" in s else s
                 clean_s = clean_s.strip()
 
-                if clean_s in CLEAN_FEATURES:
-                    idx = CLEAN_FEATURES.index(clean_s)
+                # If that symptom exists in our model's vocabulary, flip the bit to 1
+                if clean_s in CLEAN_SYMPTOMS:
+                    idx = CLEAN_SYMPTOMS.index(clean_s)
                     input_vector[idx] = 1
 
-            # Get Prediction from Random Forest Model
-            # Reshape to (1, 131)
+            # Predict using the 131-length vector
             prediction_result = model.predict(input_vector.reshape(1, -1))[0]
             disease = str(prediction_result).strip()
 
-            # Get Description from CSV
+            # Fetch Metadata (Description & Precautions)
             desc = description_df[description_df['Disease'] == disease]['Description'].values
             description = desc[0] if len(desc) > 0 else "No description available."
 
-            # Get Precautions from CSV
             prec = precaution_df[precaution_df['Disease'] == disease].iloc[:, 1:].values
             precautions = [p for p in prec[0].tolist() if str(p) != 'nan' and p is not None] if len(prec) > 0 else []
 
@@ -83,10 +84,8 @@ def handle_request():
                 "status": "success"
             })
         except Exception as e:
-            # Printing error to Vercel logs for easier debugging
             print(f"Prediction Error: {e}")
-            return jsonify({"error": str(e)}), 500
+            return jsonify({"error": "Failed to process prediction"}), 500
 
-# Required for Vercel
 if __name__ == "__main__":
     app.run(port=5000, debug=True)
